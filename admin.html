@@ -331,21 +331,27 @@ async function loadProfiles(){
   const emptyEl = document.getElementById('emptyState');
   listEl.innerHTML = '<p style="color:var(--chrome-dim);font-size:13px;">Cargando...</p>';
 
-  const snap = await db.collection('profiles').orderBy('createdAt', 'desc').get().catch(async ()=>{
-    // Si no hay campo createdAt en documentos viejos, cae aquí: trae sin ordenar
-    return await db.collection('profiles').get();
+  // Traemos TODOS los documentos sin orderBy: un orderBy excluiría
+  // cualquier perfil que no tenga el campo createdAt (ej. creados
+  // automáticamente al visitar un link nuevo desde la tarjeta pública).
+  const snap = await db.collection('profiles').get();
+
+  const docs = snap.docs.sort((a, b)=>{
+    const ta = a.data().createdAt ? a.data().createdAt.toMillis() : 0;
+    const tb = b.data().createdAt ? b.data().createdAt.toMillis() : 0;
+    return tb - ta; // más reciente primero
   });
 
   listEl.innerHTML = '';
-  document.getElementById('statTotal').textContent = snap.size;
+  document.getElementById('statTotal').textContent = docs.length;
 
-  if(snap.empty){
+  if(docs.length === 0){
     emptyEl.style.display = 'block';
     return;
   }
   emptyEl.style.display = 'none';
 
-  snap.forEach(doc=>{
+  docs.forEach(doc=>{
     const data = doc.data();
     const id = doc.id;
     const link = SITE_BASE_URL + '?id=' + encodeURIComponent(id);
