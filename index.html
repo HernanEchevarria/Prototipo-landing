@@ -367,6 +367,52 @@
     line-height:1.6;
     padding:0 8px;
   }
+
+  /* ---------- photo upload ---------- */
+  .photo-field{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-bottom:16px;
+  }
+  .photo-preview{
+    width:56px;height:56px;
+    border-radius:50%;
+    flex:none;
+    background:rgba(255,255,255,.05);
+    border:2px solid rgba(201,210,220,.2);
+    overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-mono);
+    font-size:10px;
+    color:var(--chrome-dim);
+  }
+  .photo-preview img{width:100%;height:100%;object-fit:cover;}
+  .photo-controls{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;}
+  .photo-btn-row{display:flex;gap:8px;}
+  .photo-choose-btn, .photo-remove-btn{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:.04em;
+    padding:8px 12px;
+    border-radius:9px;
+    cursor:pointer;
+  }
+  .photo-choose-btn{
+    background:rgba(201,124,76,.12);
+    border:1px solid rgba(201,124,76,.4);
+    color:var(--copper-bright);
+  }
+  .photo-choose-btn:hover{background:rgba(201,124,76,.2);}
+  .photo-remove-btn{
+    background:transparent;
+    border:1px solid rgba(201,210,220,.2);
+    color:var(--chrome-dim);
+  }
+  .photo-remove-btn:hover{color:var(--paper);border-color:var(--chrome);}
+  .photo-hint{font-size:10.5px;color:var(--chrome-dim);}
+  .photo-upload-status{font-size:10.5px;color:var(--ok);min-height:14px;}
+  input[type="file"]{display:none;}
 </style>
 </head>
 <body>
@@ -428,8 +474,19 @@
       <input type="text" id="inHandle" placeholder="@tuusuario">
     </div>
     <div class="field">
-      <label>Foto (URL, opcional)</label>
-      <input type="text" id="inAvatar" placeholder="https://...">
+      <label>Foto de perfil</label>
+      <div class="photo-field">
+        <div class="photo-preview" id="photoPreview">Sin foto</div>
+        <div class="photo-controls">
+          <div class="photo-btn-row">
+            <button type="button" class="photo-choose-btn" id="photoChooseBtn">Elegir foto</button>
+            <button type="button" class="photo-remove-btn" id="photoRemoveBtn">Quitar</button>
+          </div>
+          <span class="photo-hint">JPG o PNG, máx. 3MB</span>
+          <span class="photo-upload-status" id="photoUploadStatus"></span>
+        </div>
+        <input type="file" id="inAvatarFile" accept="image/png, image/jpeg, image/webp">
+      </div>
     </div>
 
     <p class="eyebrow" style="margin-top:18px;">Enlaces</p>
@@ -468,6 +525,14 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+
+/* =========================================================
+   CONFIGURACIÓN DE CLOUDINARY (para subir fotos de perfil)
+   Reemplaza con tus valores de cloudinary.com → Dashboard
+   y Settings → Upload → Upload presets (modo "Unsigned")
+   ========================================================= */
+const CLOUDINARY_CLOUD_NAME = "TU_CLOUD_NAME";
+const CLOUDINARY_UPLOAD_PRESET = "TU_UPLOAD_PRESET";
 
 /* Cada tarjeta es un documento distinto en la colección "profiles".
    El ID del perfil se toma de la URL: index.html?id=maria
@@ -578,12 +643,29 @@ function buildLinkEditorRow(link, index){
   return wrap;
 }
 
+let selectedAvatarFile = null;   // archivo nuevo elegido, pendiente de subir
+let avatarRemoved = false;       // si el usuario le dio "Quitar"
+
+function setPhotoPreview(url, label){
+  const preview = document.getElementById('photoPreview');
+  if(url){
+    preview.innerHTML = `<img src="${escapeAttr(url)}" alt="">`;
+  } else {
+    preview.textContent = label || 'Sin foto';
+  }
+}
+
 function openPanelWithData(data){
   document.getElementById('inName').value = data.name;
   document.getElementById('inRole').value = data.role;
   document.getElementById('inBio').value = data.bio;
   document.getElementById('inHandle').value = data.handle;
-  document.getElementById('inAvatar').value = data.avatar || '';
+
+  selectedAvatarFile = null;
+  avatarRemoved = false;
+  document.getElementById('inAvatarFile').value = '';
+  document.getElementById('photoUploadStatus').textContent = '';
+  setPhotoPreview(data.avatar, 'Sin foto');
 
   const container = document.getElementById('linkEditors');
   container.innerHTML = '';
@@ -606,9 +688,28 @@ function collectFormData(){
     role: document.getElementById('inRole').value.trim(),
     bio: document.getElementById('inBio').value.trim(),
     handle: document.getElementById('inHandle').value.trim(),
-    avatar: document.getElementById('inAvatar').value.trim(),
     links
   };
+}
+
+async function uploadAvatarIfNeeded(){
+  // Sube la foto nueva a Cloudinary y devuelve la URL a guardar en Firestore.
+  // Si el usuario no tocó la foto, devuelve undefined (no se modifica).
+  // Si le dio "Quitar", devuelve '' (borra la foto).
+  if(avatarRemoved && !selectedAvatarFile) return '';
+  if(!selectedAvatarFile) return undefined;
+
+  const formData = new FormData();
+  formData.append('file', selectedAvatarFile);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+  const res = await fetch(url, { method:'POST', body: formData });
+  if(!res.ok){
+    throw new Error('Error subiendo la imagen a Cloudinary');
+  }
+  const result = await res.json();
+  return result.secure_url;
 }
 
 async function loadData(){
@@ -619,7 +720,10 @@ async function loadData(){
       return snap.data();
     }
     // Primera vez que se abre este perfil: crea el documento con datos de ejemplo
-    await docRef.set(DEFAULT_DATA);
+    await docRef.set({
+      ...DEFAULT_DATA,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
     return DEFAULT_DATA;
   }catch(e){
     console.error('Error al cargar de Firestore:', e);
@@ -628,7 +732,8 @@ async function loadData(){
 }
 
 async function saveData(data){
-  await db.collection('profiles').doc(PROFILE_ID).set(data);
+  // merge:true evita borrar campos que el formulario no conoce, como createdAt
+  await db.collection('profiles').doc(PROFILE_ID).set(data, { merge: true });
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
@@ -643,6 +748,46 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       openPanelWithData(currentData);
       panel.scrollIntoView({behavior:'smooth', block:'nearest'});
     }
+  });
+
+  document.getElementById('photoChooseBtn').addEventListener('click', ()=>{
+    document.getElementById('inAvatarFile').click();
+  });
+
+  document.getElementById('inAvatarFile').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    const statusEl = document.getElementById('photoUploadStatus');
+    if(!file) return;
+
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type)){
+      statusEl.style.color = 'var(--copper-bright)';
+      statusEl.textContent = 'Formato no soportado. Usa JPG, PNG o WEBP.';
+      e.target.value = '';
+      return;
+    }
+    if(file.size > 3 * 1024 * 1024){
+      statusEl.style.color = 'var(--copper-bright)';
+      statusEl.textContent = 'La imagen pesa más de 3MB.';
+      e.target.value = '';
+      return;
+    }
+
+    selectedAvatarFile = file;
+    avatarRemoved = false;
+    statusEl.style.color = 'var(--chrome-dim)';
+    statusEl.textContent = 'Lista para subir al guardar.';
+
+    const reader = new FileReader();
+    reader.onload = (ev)=> setPhotoPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('photoRemoveBtn').addEventListener('click', ()=>{
+    selectedAvatarFile = null;
+    avatarRemoved = true;
+    document.getElementById('inAvatarFile').value = '';
+    document.getElementById('photoUploadStatus').textContent = '';
+    setPhotoPreview(null, 'Sin foto');
   });
 
   document.getElementById('addLinkBtn').addEventListener('click', ()=>{
@@ -660,9 +805,16 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const saveBtn = document.getElementById('saveBtn');
     saveBtn.disabled = true;
     statusMsg.style.color = 'var(--chrome-dim)';
-    statusMsg.textContent = 'Guardando...';
+    statusMsg.textContent = selectedAvatarFile ? 'Subiendo foto...' : 'Guardando...';
     try{
       const data = collectFormData();
+      const avatarResult = await uploadAvatarIfNeeded();
+      if(avatarResult !== undefined){
+        data.avatar = avatarResult;
+      } else {
+        data.avatar = currentData.avatar || '';
+      }
+      statusMsg.textContent = 'Guardando...';
       await saveData(data);
       currentData = data;
       renderCard(data);
