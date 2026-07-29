@@ -387,8 +387,8 @@
     <div class="avatar-row">
       <div class="avatar" id="avatarBox">MG</div>
       <div class="id-block">
-        <div class="name" id="dispName">Maria Grazia</div>
-        <div class="role" id="dispRole">Novia de Hernán</div>
+        <div class="name" id="dispName">María González</div>
+        <div class="role" id="dispRole">Diseñadora de producto</div>
       </div>
     </div>
 
@@ -443,11 +443,40 @@
     <div class="status-msg" id="statusMsg"></div>
   </div>
 
-  <p class="note">Esta tarjeta se actualiza sin reprogramar el NFC: el chip solo guarda esta URL, y lo que ves aquí se guarda y carga desde este mismo enlace.</p>
+  <p class="note">Esta tarjeta se actualiza sin reprogramar el NFC: el chip solo guarda esta URL, y los datos se guardan en la nube (Firebase), así que se ven igual desde cualquier dispositivo.</p>
 
 </div>
 
+<!-- Firebase SDK (compat, sin necesidad de bundler) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
 <script>
+/* =========================================================
+   CONFIGURACIÓN DE FIREBASE
+   Reemplaza estos valores con los de TU proyecto
+   (Configuración del proyecto → Tus apps → objeto firebaseConfig)
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDByJsSoacC4VdvhMTij1g2_b5Z9KLPxdY",
+  authDomain: "landing-page-84519.firebaseapp.com",
+  projectId: "landing-page-84519",
+  storageBucket: "landing-page-84519.firebasestorage.app",
+  messagingSenderId: "403160384441",
+  appId: "1:403160384441:web:ef05cda1e9346e688d2c68"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* Cada tarjeta es un documento distinto en la colección "profiles".
+   El ID del perfil se toma de la URL: index.html?id=maria
+   Si no hay parámetro "id", usa "demo".
+   Así puedes tener una URL distinta por cliente, ej:
+   tudominio.com/?id=maria   ->  tudominio.com/?id=juan  */
+const params = new URLSearchParams(window.location.search);
+const PROFILE_ID = params.get('id') || 'demo';
+
 const PLATFORM_ICONS = {
   linkedin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4V9h4v1.7A5.99 5.99 0 0 1 16 8Z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="1.5"/></svg>',
   instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>',
@@ -584,18 +613,22 @@ function collectFormData(){
 
 async function loadData(){
   try{
-    const result = await window.storage.get(STORAGE_KEY, false);
-    if(result && result.value){
-      return JSON.parse(result.value);
+    const docRef = db.collection('profiles').doc(PROFILE_ID);
+    const snap = await docRef.get();
+    if(snap.exists){
+      return snap.data();
     }
+    // Primera vez que se abre este perfil: crea el documento con datos de ejemplo
+    await docRef.set(DEFAULT_DATA);
+    return DEFAULT_DATA;
   }catch(e){
-    console.log('No hay datos guardados aún, usando datos de ejemplo.');
+    console.error('Error al cargar de Firestore:', e);
+    return DEFAULT_DATA;
   }
-  return DEFAULT_DATA;
 }
 
 async function saveData(data){
-  await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
+  await db.collection('profiles').doc(PROFILE_ID).set(data);
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
