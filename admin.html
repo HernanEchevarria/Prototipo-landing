@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de administración · Tarjetas NFC</title>
+<style>
+  :root{
+    --ink:#0E1A2B;
+    --ink-2:#132238;
+    --chrome:#C9D2DC;
+    --chrome-dim:#7C8A9C;
+    --copper:#C97C4C;
+    --copper-bright:#E29A6C;
+    --paper:#F3F1EB;
+    --ok:#5FBF8F;
+    --danger:#D9694F;
+    --radius:16px;
+    --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+    --font-body: 'Inter', 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% -10%, #1a2c46 0%, transparent 50%),
+      radial-gradient(circle at 100% 0%, #16283f 0%, transparent 40%),
+      var(--ink);
+    font-family:var(--font-body);
+    color:var(--paper);
+    min-height:100vh;
+  }
+
+  /* ---------- login screen ---------- */
+  .login-wrap{
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:20px;
+  }
+  .login-card{
+    width:100%;max-width:360px;
+    background:linear-gradient(160deg, #1B2E48 0%, #101D30 60%, #0C1726 100%);
+    border:1px solid rgba(201,210,220,.14);
+    border-radius:var(--radius);
+    padding:32px 28px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.6);
+  }
+  .login-card h1{
+    font-family:var(--font-display);
+    font-size:20px;
+    margin:0 0 4px;
+  }
+  .login-card p.sub{
+    color:var(--chrome-dim);
+    font-size:13px;
+    margin:0 0 24px;
+  }
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--chrome-dim);margin-bottom:5px;font-family:var(--font-mono);
+  }
+  .field input{
+    width:100%;background:rgba(255,255,255,.04);
+    border:1px solid rgba(201,210,220,.18);border-radius:9px;
+    padding:10px 12px;color:var(--paper);font-family:var(--font-body);
+    font-size:14px;outline:none;
+  }
+  .field input:focus{border-color:var(--copper-bright);}
+  .btn-primary{
+    width:100%;padding:12px;border:none;border-radius:9px;
+    background:var(--copper);color:#1B0F06;font-weight:600;
+    font-family:var(--font-mono);font-size:12.5px;letter-spacing:.05em;
+    text-transform:uppercase;cursor:pointer;
+  }
+  .btn-primary:hover{background:var(--copper-bright);}
+  .btn-primary:disabled{opacity:.5;cursor:default;}
+  .login-error{color:var(--danger);font-size:12.5px;margin-top:12px;min-height:14px;text-align:center;}
+
+  /* ---------- dashboard ---------- */
+  .dash{display:none;max-width:920px;margin:0 auto;padding:32px 20px 80px;}
+  .dash.visible{display:block;}
+  .dash-header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:28px;flex-wrap:wrap;gap:14px;
+  }
+  .dash-header h1{
+    font-family:var(--font-display);font-size:24px;margin:0;
+  }
+  .dash-header .who{font-size:12.5px;color:var(--chrome-dim);margin-top:4px;}
+  .header-actions{display:flex;gap:10px;}
+  .btn-secondary{
+    background:transparent;border:1px solid rgba(201,210,220,.25);
+    color:var(--chrome);padding:10px 16px;border-radius:9px;
+    font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;
+    cursor:pointer;
+  }
+  .btn-secondary:hover{border-color:var(--chrome);}
+  .btn-accent{
+    background:rgba(201,124,76,.14);border:1px solid rgba(201,124,76,.45);
+    color:var(--copper-bright);padding:10px 16px;border-radius:9px;
+    font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;
+    cursor:pointer;
+  }
+  .btn-accent:hover{background:rgba(201,124,76,.22);}
+
+  .stats-row{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;}
+  .stat-box{
+    background:var(--ink-2);border:1px solid rgba(201,210,220,.12);
+    border-radius:12px;padding:14px 18px;min-width:120px;
+  }
+  .stat-box .num{font-family:var(--font-display);font-size:26px;font-weight:600;}
+  .stat-box .label{font-size:11px;color:var(--chrome-dim);text-transform:uppercase;letter-spacing:.06em;font-family:var(--font-mono);}
+
+  .profile-list{display:flex;flex-direction:column;gap:10px;}
+  .profile-row{
+    display:flex;align-items:center;gap:14px;
+    background:var(--ink-2);border:1px solid rgba(201,210,220,.1);
+    border-radius:12px;padding:14px 16px;
+  }
+  .p-avatar{
+    width:44px;height:44px;border-radius:50%;flex:none;
+    background:linear-gradient(135deg, var(--copper-bright), var(--copper));
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-display);font-weight:700;font-size:15px;color:#1B0F06;
+    overflow:hidden;
+  }
+  .p-avatar img{width:100%;height:100%;object-fit:cover;}
+  .p-info{min-width:0;flex:1;}
+  .p-name{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .p-role{font-size:12px;color:var(--chrome-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .p-link{
+    font-family:var(--font-mono);font-size:11.5px;color:var(--chrome);
+    background:rgba(255,255,255,.04);border:1px solid rgba(201,210,220,.12);
+    padding:6px 10px;border-radius:8px;white-space:nowrap;
+    display:flex;align-items:center;gap:8px;flex:none;
+  }
+  .p-link button{
+    background:none;border:none;color:var(--copper-bright);cursor:pointer;
+    font-family:var(--font-mono);font-size:11px;padding:0;
+  }
+  .p-actions{display:flex;gap:8px;flex:none;}
+  .icon-btn{
+    width:32px;height:32px;border-radius:8px;border:1px solid rgba(201,210,220,.16);
+    background:transparent;color:var(--chrome-dim);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .icon-btn:hover{color:var(--paper);border-color:var(--chrome);}
+  .icon-btn.danger:hover{color:var(--danger);border-color:var(--danger);}
+  .icon-btn svg{width:15px;height:15px;}
+
+  .empty-state{
+    text-align:center;padding:60px 20px;color:var(--chrome-dim);
+    border:1px dashed rgba(201,210,220,.2);border-radius:12px;
+  }
+
+  /* ---------- modal ---------- */
+  .modal-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(6,10,17,.7);
+    align-items:center;justify-content:center;padding:20px;z-index:50;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    width:100%;max-width:380px;background:var(--ink-2);
+    border:1px solid rgba(201,210,220,.15);border-radius:var(--radius);
+    padding:26px;
+  }
+  .modal h3{font-family:var(--font-display);font-size:17px;margin:0 0 6px;}
+  .modal p.hint{font-size:12.5px;color:var(--chrome-dim);margin:0 0 18px;}
+  .slug-preview{
+    font-family:var(--font-mono);font-size:12px;color:var(--copper-bright);
+    margin-top:4px;word-break:break-all;
+  }
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .modal-actions button{flex:1;}
+  .modal-error{color:var(--danger);font-size:12.5px;margin-top:10px;min-height:14px;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-card">
+    <h1>Panel de administración</h1>
+    <p class="sub">Inicia sesión para gestionar los perfiles</p>
+    <div class="field">
+      <label>Correo</label>
+      <input type="email" id="loginEmail" placeholder="tucorreo@ejemplo.com">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" id="loginPassword" placeholder="••••••••">
+    </div>
+    <button class="btn-primary" id="loginBtn">Ingresar</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dash" id="dash">
+  <div class="dash-header">
+    <div>
+      <h1>Perfiles</h1>
+      <div class="who">Sesión activa: <span id="whoEmail"></span></div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-secondary" id="logoutBtn">Cerrar sesión</button>
+      <button class="btn-accent" id="newProfileBtn">+ Nuevo perfil</button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="num" id="statTotal">0</div>
+      <div class="label">Total</div>
+    </div>
+  </div>
+
+  <div class="profile-list" id="profileList"></div>
+  <div class="empty-state" id="emptyState" style="display:none;">
+    Aún no has creado ningún perfil.<br>Usa "+ Nuevo perfil" para empezar.
+  </div>
+</div>
+
+<!-- MODAL: crear perfil -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3>Crear nuevo perfil</h3>
+    <p class="hint">Este va a ser el link que le des a tu cliente.</p>
+
+    <div class="field">
+      <label>Nombre del cliente</label>
+      <input type="text" id="newName" placeholder="Ej. María González">
+    </div>
+    <div class="field">
+      <label>Identificador del link (slug)</label>
+      <input type="text" id="newSlug" placeholder="ej-maria-gonzalez">
+      <div class="slug-preview" id="slugPreview">tudominio.com/?id=</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" id="modalCancel">Cancelar</button>
+      <button class="btn-primary" id="modalCreate">Crear</button>
+    </div>
+    <div class="modal-error" id="modalError"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+<script>
+/* =========================================================
+   Usa la MISMA configuración que ya tienes en index.html
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDByJsSoacC4VdvhMTij1g2_b5Z9KLPxdY",
+  authDomain: "landing-page-84519.firebaseapp.com",
+  projectId: "landing-page-84519",
+  storageBucket: "landing-page-84519.firebasestorage.app",
+  messagingSenderId: "403160384441",
+  appId: "1:403160384441:web:ef05cda1e9346e688d2c68"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* Cambia esto por el dominio donde vas a publicar index.html */
+const SITE_BASE_URL = "https://hernanechevarria.github.io/Prototipo-landing/";
+
+const DEFAULT_PROFILE = (name) => ({
+  name: name,
+  role: '',
+  bio: '',
+  handle: '',
+  avatar: '',
+  links: [],
+  createdAt: firebase.firestore.FieldValue.serverTimestamp()
+});
+
+function slugify(str){
+  return str.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'');
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function initials(name){
+  return (name||'').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join('') || '•';
+}
+
+/* ---------- Auth ---------- */
+auth.onAuthStateChanged((user)=>{
+  if(user){
+    document.getElementById('loginWrap').style.display = 'none';
+    document.getElementById('dash').classList.add('visible');
+    document.getElementById('whoEmail').textContent = user.email;
+    loadProfiles();
+  } else {
+    document.getElementById('loginWrap').style.display = 'flex';
+    document.getElementById('dash').classList.remove('visible');
+  }
+});
+
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  try{
+    await auth.signInWithEmailAndPassword(email, password);
+  }catch(e){
+    errEl.textContent = 'Correo o contraseña incorrectos.';
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', ()=> auth.signOut());
+
+/* ---------- Cargar y renderizar perfiles ---------- */
+async function loadProfiles(){
+  const listEl = document.getElementById('profileList');
+  const emptyEl = document.getElementById('emptyState');
+  listEl.innerHTML = '<p style="color:var(--chrome-dim);font-size:13px;">Cargando...</p>';
+
+  const snap = await db.collection('profiles').orderBy('createdAt', 'desc').get().catch(async ()=>{
+    // Si no hay campo createdAt en documentos viejos, cae aquí: trae sin ordenar
+    return await db.collection('profiles').get();
+  });
+
+  listEl.innerHTML = '';
+  document.getElementById('statTotal').textContent = snap.size;
+
+  if(snap.empty){
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  snap.forEach(doc=>{
+    const data = doc.data();
+    const id = doc.id;
+    const link = SITE_BASE_URL + '?id=' + encodeURIComponent(id);
+
+    const row = document.createElement('div');
+    row.className = 'profile-row';
+    row.innerHTML = `
+      <div class="p-avatar">${data.avatar ? `<img src="${escapeHtml(data.avatar)}">` : initials(data.name)}</div>
+      <div class="p-info">
+        <div class="p-name">${escapeHtml(data.name || id)}</div>
+        <div class="p-role">${escapeHtml(data.role || 'Sin rol definido')}</div>
+      </div>
+      <div class="p-link">
+        <span>/?id=${escapeHtml(id)}</span>
+        <button class="copy-btn" data-link="${escapeHtml(link)}">Copiar</button>
+      </div>
+      <div class="p-actions">
+        <a class="icon-btn" href="${escapeHtml(link)}" target="_blank" title="Ver tarjeta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M10 14 20 4M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/></svg>
+        </a>
+        <button class="icon-btn danger delete-btn" data-id="${escapeHtml(id)}" title="Eliminar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+        </button>
+      </div>
+    `;
+    listEl.appendChild(row);
+  });
+
+  listEl.querySelectorAll('.copy-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      navigator.clipboard.writeText(btn.dataset.link);
+      const original = btn.textContent;
+      btn.textContent = '¡Copiado!';
+      setTimeout(()=> btn.textContent = original, 1200);
+    });
+  });
+
+  listEl.querySelectorAll('.delete-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm('¿Eliminar este perfil? Esta acción no se puede deshacer.')) return;
+      await db.collection('profiles').doc(btn.dataset.id).delete();
+      loadProfiles();
+    });
+  });
+}
+
+/* ---------- Modal: crear perfil ---------- */
+const modalBackdrop = document.getElementById('modalBackdrop');
+const newNameInput = document.getElementById('newName');
+const newSlugInput = document.getElementById('newSlug');
+const slugPreview = document.getElementById('slugPreview');
+
+document.getElementById('newProfileBtn').addEventListener('click', ()=>{
+  newNameInput.value = '';
+  newSlugInput.value = '';
+  slugPreview.textContent = SITE_BASE_URL + '?id=';
+  document.getElementById('modalError').textContent = '';
+  modalBackdrop.classList.add('open');
+  newNameInput.focus();
+});
+
+newNameInput.addEventListener('input', ()=>{
+  if(!newSlugInput.dataset.touched){
+    newSlugInput.value = slugify(newNameInput.value);
+    slugPreview.textContent = SITE_BASE_URL + '?id=' + (newSlugInput.value || '');
+  }
+});
+newSlugInput.addEventListener('input', ()=>{
+  newSlugInput.dataset.touched = '1';
+  newSlugInput.value = slugify(newSlugInput.value);
+  slugPreview.textContent = SITE_BASE_URL + '?id=' + newSlugInput.value;
+});
+
+document.getElementById('modalCancel').addEventListener('click', ()=> modalBackdrop.classList.remove('open'));
+
+document.getElementById('modalCreate').addEventListener('click', async ()=>{
+  const name = newNameInput.value.trim();
+  const slug = newSlugInput.value.trim();
+  const errEl = document.getElementById('modalError');
+  errEl.textContent = '';
+
+  if(!name){ errEl.textContent = 'Escribe el nombre del cliente.'; return; }
+  if(!slug){ errEl.textContent = 'El identificador del link no puede estar vacío.'; return; }
+
+  const docRef = db.collection('profiles').doc(slug);
+  const existing = await docRef.get();
+  if(existing.exists){
+    errEl.textContent = 'Ese identificador ya está en uso. Elige otro.';
+    return;
+  }
+
+  await docRef.set(DEFAULT_PROFILE(name));
+  modalBackdrop.classList.remove('open');
+  loadProfiles();
+});
+</script>
+
+</body>
+</html>
