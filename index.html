@@ -531,8 +531,8 @@ const db = firebase.firestore();
    Reemplaza con tus valores de cloudinary.com → Dashboard
    y Settings → Upload → Upload presets (modo "Unsigned")
    ========================================================= */
-const CLOUDINARY_CLOUD_NAME = "TU_CLOUD_NAME";
-const CLOUDINARY_UPLOAD_PRESET = "TU_UPLOAD_PRESET";
+const CLOUDINARY_CLOUD_NAME = "qlva8h5i";
+const CLOUDINARY_UPLOAD_PRESET = "u3orcae4";
 
 /* Cada tarjeta es un documento distinto en la colección "profiles".
    El ID del perfil se toma de la URL: index.html?id=maria
@@ -692,6 +692,43 @@ function collectFormData(){
   };
 }
 
+function compressImage(file, maxSize = 500, quality = 0.82){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e)=>{ img.src = e.target.result; };
+    reader.onerror = reject;
+
+    img.onload = ()=>{
+      let { width, height } = img;
+
+      // Redimensiona manteniendo proporción, con el lado más largo en maxSize
+      if(width > height && width > maxSize){
+        height = Math.round(height * (maxSize / width));
+        width = maxSize;
+      } else if(height >= width && height > maxSize){
+        width = Math.round(width * (maxSize / height));
+        height = maxSize;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob((blob)=>{
+        if(!blob){ reject(new Error('No se pudo comprimir la imagen')); return; }
+        resolve(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+
+    reader.readAsDataURL(file);
+  });
+}
+
 async function uploadAvatarIfNeeded(){
   // Sube la foto nueva a Cloudinary y devuelve la URL a guardar en Firestore.
   // Si el usuario no tocó la foto, devuelve undefined (no se modifica).
@@ -699,8 +736,10 @@ async function uploadAvatarIfNeeded(){
   if(avatarRemoved && !selectedAvatarFile) return '';
   if(!selectedAvatarFile) return undefined;
 
+  const compressedBlob = await compressImage(selectedAvatarFile);
+
   const formData = new FormData();
-  formData.append('file', selectedAvatarFile);
+  formData.append('file', compressedBlob, 'avatar.jpg');
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
   const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
