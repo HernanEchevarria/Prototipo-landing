@@ -141,6 +141,13 @@
     background:none;border:none;color:var(--copper-bright);cursor:pointer;
     font-family:var(--font-mono);font-size:11px;padding:0;
   }
+  .pin-btn{
+    font-family:var(--font-mono);
+  }
+  button.pin-btn{
+    color:var(--chrome);
+  }
+  button.pin-btn:hover{border-color:rgba(201,210,220,.3);}
   .p-actions{display:flex;gap:8px;flex:none;}
   .icon-btn{
     width:32px;height:32px;border-radius:8px;border:1px solid rgba(201,210,220,.16);
@@ -227,24 +234,47 @@
 <!-- MODAL: crear perfil -->
 <div class="modal-backdrop" id="modalBackdrop">
   <div class="modal">
-    <h3>Crear nuevo perfil</h3>
-    <p class="hint">Este va a ser el link que le des a tu cliente.</p>
 
-    <div class="field">
-      <label>Nombre del cliente</label>
-      <input type="text" id="newName" placeholder="Ej. María González">
-    </div>
-    <div class="field">
-      <label>Identificador del link (slug)</label>
-      <input type="text" id="newSlug" placeholder="ej-maria-gonzalez">
-      <div class="slug-preview" id="slugPreview">tudominio.com/?id=</div>
+    <div id="modalFormView">
+      <h3>Crear nuevo perfil</h3>
+      <p class="hint">Este va a ser el link que le des a tu cliente.</p>
+
+      <div class="field">
+        <label>Nombre del cliente</label>
+        <input type="text" id="newName" placeholder="Ej. María González">
+      </div>
+      <div class="field">
+        <label>Identificador del link (slug)</label>
+        <input type="text" id="newSlug" placeholder="ej-maria-gonzalez">
+        <div class="slug-preview" id="slugPreview">tudominio.com/?id=</div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" id="modalCancel">Cancelar</button>
+        <button class="btn-primary" id="modalCreate">Crear</button>
+      </div>
+      <div class="modal-error" id="modalError"></div>
     </div>
 
-    <div class="modal-actions">
-      <button class="btn-secondary" id="modalCancel">Cancelar</button>
-      <button class="btn-primary" id="modalCreate">Crear</button>
+    <div id="modalSuccessView" style="display:none;">
+      <h3>¡Perfil creado! 🎉</h3>
+      <p class="hint">Guarda estos dos datos — el PIN no se vuelve a mostrar automáticamente después de esto.</p>
+
+      <div class="field">
+        <label>Link para la tarjeta NFC</label>
+        <div class="slug-preview" id="successLink" style="margin-top:4px;"></div>
+      </div>
+      <div class="field">
+        <label>PIN de edición (dáselo solo al cliente)</label>
+        <div class="slug-preview" id="successPin" style="font-size:20px;letter-spacing:.2em;"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" id="successCopyBtn">Copiar link + PIN</button>
+        <button class="btn-primary" id="successDoneBtn">Listo</button>
+      </div>
     </div>
-    <div class="modal-error" id="modalError"></div>
+
   </div>
 </div>
 
@@ -271,13 +301,26 @@ const db = firebase.firestore();
 /* Cambia esto por el dominio donde vas a publicar index.html */
 const SITE_BASE_URL = "https://hernanechevarria.github.io/Prototipo-landing/";
 
-const DEFAULT_PROFILE = (name) => ({
+/* Cambia a true cuando migres a Vercel con el vercel.json de rewrites.
+   Mientras sigas en GitHub Pages, déjalo en false. */
+const USE_CLEAN_URLS = false;
+
+function buildProfileLink(id){
+  return USE_CLEAN_URLS ? (SITE_BASE_URL + id) : (SITE_BASE_URL + '?id=' + encodeURIComponent(id));
+}
+
+function generatePin(){
+  return String(Math.floor(1000 + Math.random() * 9000)); // 4 dígitos
+}
+
+const DEFAULT_PROFILE = (name, pin) => ({
   name: name,
   role: '',
   bio: '',
   handle: '',
   avatar: '',
   links: [],
+  editPin: pin,
   createdAt: firebase.firestore.FieldValue.serverTimestamp()
 });
 
@@ -354,7 +397,7 @@ async function loadProfiles(){
   docs.forEach(doc=>{
     const data = doc.data();
     const id = doc.id;
-    const link = SITE_BASE_URL + '?id=' + encodeURIComponent(id);
+    const link = buildProfileLink(id);
 
     const row = document.createElement('div');
     row.className = 'profile-row';
@@ -364,6 +407,9 @@ async function loadProfiles(){
         <div class="p-name">${escapeHtml(data.name || id)}</div>
         <div class="p-role">${escapeHtml(data.role || 'Sin rol definido')}</div>
       </div>
+      <button class="p-link pin-btn" data-id="${escapeHtml(id)}" data-pin="${escapeHtml(data.editPin || '')}" style="cursor:pointer;">
+        <span class="pin-label">🔒 ${data.editPin ? 'Ver PIN' : 'Generar PIN'}</span>
+      </button>
       <div class="p-link">
         <span>/?id=${escapeHtml(id)}</span>
         <button class="copy-btn" data-link="${escapeHtml(link)}">Copiar</button>
@@ -378,6 +424,19 @@ async function loadProfiles(){
       </div>
     `;
     listEl.appendChild(row);
+  });
+
+  listEl.querySelectorAll('.pin-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const label = btn.querySelector('.pin-label');
+      let pin = btn.dataset.pin;
+      if(!pin){
+        pin = generatePin();
+        await db.collection('profiles').doc(btn.dataset.id).update({ editPin: pin });
+        btn.dataset.pin = pin;
+      }
+      label.textContent = `🔒 PIN: ${pin}`;
+    });
   });
 
   listEl.querySelectorAll('.copy-btn').forEach(btn=>{
@@ -405,9 +464,12 @@ const newSlugInput = document.getElementById('newSlug');
 const slugPreview = document.getElementById('slugPreview');
 
 document.getElementById('newProfileBtn').addEventListener('click', ()=>{
+  document.getElementById('modalFormView').style.display = 'block';
+  document.getElementById('modalSuccessView').style.display = 'none';
   newNameInput.value = '';
   newSlugInput.value = '';
-  slugPreview.textContent = SITE_BASE_URL + '?id=';
+  newSlugInput.dataset.touched = '';
+  slugPreview.textContent = buildProfileLink('');
   document.getElementById('modalError').textContent = '';
   modalBackdrop.classList.add('open');
   newNameInput.focus();
@@ -416,16 +478,29 @@ document.getElementById('newProfileBtn').addEventListener('click', ()=>{
 newNameInput.addEventListener('input', ()=>{
   if(!newSlugInput.dataset.touched){
     newSlugInput.value = slugify(newNameInput.value);
-    slugPreview.textContent = SITE_BASE_URL + '?id=' + (newSlugInput.value || '');
+    slugPreview.textContent = buildProfileLink(newSlugInput.value || '');
   }
 });
 newSlugInput.addEventListener('input', ()=>{
   newSlugInput.dataset.touched = '1';
   newSlugInput.value = slugify(newSlugInput.value);
-  slugPreview.textContent = SITE_BASE_URL + '?id=' + newSlugInput.value;
+  slugPreview.textContent = buildProfileLink(newSlugInput.value);
 });
 
 document.getElementById('modalCancel').addEventListener('click', ()=> modalBackdrop.classList.remove('open'));
+document.getElementById('successDoneBtn').addEventListener('click', ()=>{
+  modalBackdrop.classList.remove('open');
+  loadProfiles();
+});
+document.getElementById('successCopyBtn').addEventListener('click', ()=>{
+  const link = document.getElementById('successLink').textContent;
+  const pin = document.getElementById('successPin').textContent;
+  navigator.clipboard.writeText(`Link: ${link}\nPIN de edición: ${pin}`);
+  const btn = document.getElementById('successCopyBtn');
+  const original = btn.textContent;
+  btn.textContent = '¡Copiado!';
+  setTimeout(()=> btn.textContent = original, 1200);
+});
 
 document.getElementById('modalCreate').addEventListener('click', async ()=>{
   const name = newNameInput.value.trim();
@@ -443,9 +518,13 @@ document.getElementById('modalCreate').addEventListener('click', async ()=>{
     return;
   }
 
-  await docRef.set(DEFAULT_PROFILE(name));
-  modalBackdrop.classList.remove('open');
-  loadProfiles();
+  const pin = generatePin();
+  await docRef.set(DEFAULT_PROFILE(name, pin));
+
+  document.getElementById('successLink').textContent = buildProfileLink(slug);
+  document.getElementById('successPin').textContent = pin;
+  document.getElementById('modalFormView').style.display = 'none';
+  document.getElementById('modalSuccessView').style.display = 'block';
 });
 </script>
 
