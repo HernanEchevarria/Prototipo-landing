@@ -685,6 +685,13 @@ function buildLinkEditorRow(link, index){
     <button class="remove-link">✕ Quitar enlace</button>
   `;
   wrap.querySelector('.remove-link').addEventListener('click', ()=> wrap.remove());
+
+  const platformSelect = wrap.querySelector('.le-platform');
+  const labelInput = wrap.querySelector('.le-label');
+  platformSelect.addEventListener('change', ()=>{
+    labelInput.value = PLATFORM_LABELS[platformSelect.value] || '';
+  });
+
   return wrap;
 }
 
@@ -915,7 +922,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   document.getElementById('addLinkBtn').addEventListener('click', ()=>{
     const container = document.getElementById('linkEditors');
     const idx = container.children.length;
-    container.appendChild(buildLinkEditorRow({platform:'web', label:'', sub:'', url:''}, idx));
+    container.appendChild(buildLinkEditorRow({platform:'web', label: PLATFORM_LABELS['web'], sub:'', url:''}, idx));
   });
 
   document.getElementById('cancelBtn').addEventListener('click', ()=>{
